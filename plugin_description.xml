@@ -1,0 +1,7 @@
+<library path="cloisim_rviz_plugin">
+  <class name="cloisim_rviz_plugin/JogControlPanel" type="cloisim_rviz_plugin::JogControlPanel" base_class_type="rviz_common::Panel">
+    <description>
+      [cloisim] cloisim jog control panel
+    </description>
+  </class>
+</library>
