@@ -89,7 +89,8 @@
         "semaphore": "cpp",
         "stop_token": "cpp",
         "qlineedit": "cpp",
-        "qspinbox": "cpp"
+        "qspinbox": "cpp",
+        "qformlayout": "cpp"
     },
     "cmake.sourceDirectory": "${workspaceFolder}/cloisim_ros_actor",
     "githubPullRequests.ignoredPullRequestBranches": [
