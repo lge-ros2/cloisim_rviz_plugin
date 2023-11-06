@@ -37,6 +37,8 @@ JogControlPanel::JogControlPanel(QWidget *parent)
 
 JogControlPanel::~JogControlPanel()
 {
+  handleStopButton();
+
   delete form_;
   form_ = nullptr;
 
@@ -62,8 +64,6 @@ JogControlPanel::~JogControlPanel()
   move_btn_ = nullptr;
 
   is_run_thread_ = false;
-
-  handleStopButton();
 
   if (move_thread_.joinable())
     move_thread_.join();
