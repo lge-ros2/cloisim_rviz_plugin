@@ -161,6 +161,7 @@ void JogControlPanel::initializeLayout()
 
     groupBoxA->setLayout(form);
     groupBoxA->setStyleSheet(group_style);
+    groupBoxA->setFixedHeight(140);
   }
 
   auto groupBoxC = new QGroupBox("Joints States && Command");
@@ -235,8 +236,6 @@ void JogControlPanel::initializeLayout()
 
   auto main_layout = new QVBoxLayout();
   main_layout->setContentsMargins(3, 3, 3, 3);
-  // main_layout->setSizeConstraint(QLayout::SetMinimumSize);
-  // main_layout->setSizeConstraint(QLayout::SetMinAndMaxSize);
   main_layout->addWidget(groupBoxA);
   main_layout->addWidget(groupBoxC);
 
