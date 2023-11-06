@@ -90,7 +90,10 @@
         "stop_token": "cpp",
         "qlineedit": "cpp",
         "qspinbox": "cpp",
-        "qformlayout": "cpp"
+        "qformlayout": "cpp",
+        "qintvalidator": "cpp",
+        "qdoublevalidator": "cpp",
+        "qgroupbox": "cpp"
     },
     "cmake.sourceDirectory": "${workspaceFolder}/cloisim_ros_actor",
     "githubPullRequests.ignoredPullRequestBranches": [
