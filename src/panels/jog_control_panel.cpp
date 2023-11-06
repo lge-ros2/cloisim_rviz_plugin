@@ -4,7 +4,6 @@
 #include <QIntValidator>
 #include <QLabel>
 #include <QMessageBox>
-#include <QPushButton>
 #include <QScrollArea>
 #include <QSlider>
 #include <rviz_common/display_context.hpp>
@@ -31,6 +30,7 @@ JogControlPanel::JogControlPanel(QWidget *parent)
     , joint_command_topic_edit_(nullptr)
     , control_freq_line_edit_(nullptr)
     , move_duration_line_edit_(nullptr)
+    , move_btn_(nullptr)
 {
   initializeLayout();
 }
@@ -58,9 +58,13 @@ JogControlPanel::~JogControlPanel()
   delete move_duration_line_edit_;
   move_duration_line_edit_ = nullptr;
 
+  delete move_btn_;
+  move_btn_ = nullptr;
+
   is_run_thread_ = false;
 
   handleStopButton();
+
   if (move_thread_.joinable())
     move_thread_.join();
 }
@@ -195,7 +199,7 @@ void JogControlPanel::initializeLayout()
     move_duration_line_edit_ = new QLineEdit(QString::number(5));
     move_duration_line_edit_->setValidator(new QDoubleValidator(0, 1000000, 2, move_duration_line_edit_));
 
-    control_freq_line_edit_ = new QLineEdit(QString::number(10));
+    control_freq_line_edit_ = new QLineEdit(QString::number(50));
     control_freq_line_edit_->setValidator(new QIntValidator(1, 100, control_freq_line_edit_));
 
     auto move_form = new QFormLayout();
@@ -203,10 +207,10 @@ void JogControlPanel::initializeLayout()
     move_form->addRow(tr("Control Frequency:"), control_freq_line_edit_);
     move_form->addRow(tr("Move Duration:"), move_duration_line_edit_);
 
-    auto move_btn = new QPushButton(tr("Move"));
-    move_btn->setStyleSheet(button_style);
-    move_btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-    connect(move_btn, &QPushButton::released, this, &JogControlPanel::handleMoveButton);
+    move_btn_ = new QPushButton(tr("Move"));
+    move_btn_->setStyleSheet(button_style);
+    move_btn_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+    connect(move_btn_, &QPushButton::released, this, &JogControlPanel::handleMoveButton);
 
     auto stop_btn = new QPushButton(tr("Stop"));
     stop_btn->setStyleSheet(button_style);
@@ -220,7 +224,7 @@ void JogControlPanel::initializeLayout()
     joint_command_vbox->addWidget(reset_zero_btn);
     joint_command_vbox->addWidget(set_btn);
     joint_command_vbox->addLayout(move_form);
-    joint_command_vbox->addWidget(move_btn);
+    joint_command_vbox->addWidget(move_btn_);
     joint_command_vbox->addWidget(stop_btn);
     joint_command_vbox->addLayout(form_);
 
@@ -270,7 +274,7 @@ void JogControlPanel::handleJointStates(sensor_msgs::msg::JointState::ConstShare
       pos_line_edit->setReadOnly(true);
       pos_line_edit->setFocusPolicy(Qt::ClickFocus);
       pos_line_edit->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Minimum);
-      cmd_line_edit->setMinimumWidth(25);
+      pos_line_edit->setMinimumWidth(25);
       std::get<0>(joints_map_[joint_name]) = pos_line_edit;
 
       auto cmd_line_edit = new QLineEdit(QString::number(joint_position));
@@ -358,7 +362,7 @@ void JogControlPanel::moveThread()
 
     const auto time_now = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
 
-    std::cout << "running thread " << move_msgs.back().time << ", " << (time_now - move_start_time_) << std::endl;
+    // std::cout << "running thread " << move_msgs.back().time << ", " << (time_now - move_start_time_) << std::endl;
 
     if (time_now - move_start_time_ > move_msgs.back().time)
     {
@@ -446,6 +450,7 @@ void JogControlPanel::handleMoveButton()
   std::cout << "Start Move" << std::endl;
   if (generateSimpleMotionPlan())
   {
+    move_btn_->setEnabled(false);
     is_move_joint_ = true;
     move_start_time_ = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
   }
@@ -462,6 +467,7 @@ void JogControlPanel::handleStopButton()
   std::cout << "Stop Move" << std::endl;
   is_move_joint_ = false;
   move_start_time_ = 0;
+  move_btn_->setEnabled(true);
 }
 
 void JogControlPanel::parseRobotDescription(const std::string &data)

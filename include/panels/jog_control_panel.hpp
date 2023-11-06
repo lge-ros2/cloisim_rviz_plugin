@@ -4,6 +4,7 @@
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QSlider>
 #include <control_msgs/msg/joint_jog.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -72,6 +73,8 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
 
   QLineEdit *control_freq_line_edit_;
   QLineEdit *move_duration_line_edit_;
+
+  QPushButton *move_btn_;
 
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr sub_joint_states_;
 
