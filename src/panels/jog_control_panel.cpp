@@ -77,9 +77,9 @@ void JogControlPanel::onInitialize()
 
   resetSubscriptionJointStates();
 
-  resetPublisherJointCommand();
-
   resetSubscriptionRobotDesc();
+
+  resetPublisherJointCommand();
 
   move_thread_ = std::thread(
       [this]()
@@ -259,13 +259,33 @@ void JogControlPanel::handleJointStates(sensor_msgs::msg::JointState::ConstShare
 {
   for (auto i = 0u; i < msg->name.size(); i++)
   {
-    // cout << " " << msg->name[i] << endl;
     const auto &joint_name = msg->name[i];
     const auto &joint_position = msg->position[i];
     QLineEdit *pos_line_edit = nullptr;
+
     if (joints_map_.count(joint_name) > 0)
     {
       pos_line_edit = std::get<0>(joints_map_[joint_name]);
+
+      if (joints_range_map_.find(joint_name) != joints_range_map_.end())
+      {
+        const auto joint_minmax = joints_range_map_[joint_name];
+
+        auto cmd_line_edit = std::get<1>(joints_map_[joint_name]);
+        if (cmd_line_edit != nullptr)
+        {
+          auto validator = reinterpret_cast<const QDoubleValidator *>(cmd_line_edit->validator());
+          auto double_validator = const_cast<QDoubleValidator *>(validator);
+          double_validator->setBottom(joint_minmax.min);
+          double_validator->setTop(joint_minmax.max);
+        }
+
+        auto slider = std::get<2>(joints_map_[joint_name]);
+        if (slider != nullptr)
+        {
+          slider->setRange(kSliderDecimalFraction * joint_minmax.min, kSliderDecimalFraction * joint_minmax.max);
+        }
+      }
     }
     else
     {
@@ -283,13 +303,13 @@ void JogControlPanel::handleJointStates(sensor_msgs::msg::JointState::ConstShare
       std::get<1>(joints_map_[joint_name]) = cmd_line_edit;
 
       auto slider = new QSlider(Qt::Horizontal);
-      slider->setRange(-3.14 * slider_decimal_fraction, 3.14 * slider_decimal_fraction);
-      slider->setValue(joint_position * slider_decimal_fraction);
+      slider->setRange(-M_PI * kSliderDecimalFraction, M_PI * kSliderDecimalFraction);
+      slider->setValue(joint_position * kSliderDecimalFraction);
       slider->setSingleStep(1);
       connect(slider, &QSlider::valueChanged,
               [cmd_line_edit](const int &val) -> void
               {
-                cmd_line_edit->setText(QString::number(val / slider_decimal_fraction));
+                cmd_line_edit->setText(QString::number(val / kSliderDecimalFraction));
               });
       std::get<2>(joints_map_[joint_name]) = slider;
 
@@ -313,7 +333,7 @@ void JogControlPanel::handleResetLastStateButton()
     auto cmd_line_edit = std::get<1>(it->second);
     cmd_line_edit->setText(state_line_edit->text());
     auto slider = std::get<2>(it->second);
-    slider->setValue(state_line_edit->text().toDouble() * slider_decimal_fraction);
+    slider->setValue(state_line_edit->text().toDouble() * kSliderDecimalFraction);
   }
 }
 
@@ -322,7 +342,7 @@ void JogControlPanel::handleResetZeroButton()
   for (auto it = joints_map_.begin(); it != joints_map_.end(); it++)
   {
     auto slider = std::get<2>(it->second);
-    slider->setValue(0 * slider_decimal_fraction);
+    slider->setValue(0 * kSliderDecimalFraction);
   }
 }
 
@@ -389,7 +409,7 @@ bool JogControlPanel::generateSimpleMotionPlan()
   // std::cout << "control_frequency=" << control_frequency << ", duration=" << duration << std::endl;
 
   // initial, goal, movement step, current
-  std::map<std::string, std::tuple<double, double, double, double>> joints_movments_map;
+  std::map<std::string, std::tuple<double, double, double, double>> joints_movements_map;
 
   for (auto it = joints_map_.begin(); it != joints_map_.end(); it++)
   {
@@ -402,10 +422,10 @@ bool JogControlPanel::generateSimpleMotionPlan()
     const double diff = (goal >= start) ? (goal - start) : (start - goal);
     const auto movement_step = ((goal >= start) ? 1 : -1) * (diff / duration * control_frequency_period);
 
-    std::get<0>(joints_movments_map[joint_name]) = start;
-    std::get<1>(joints_movments_map[joint_name]) = goal;
-    std::get<2>(joints_movments_map[joint_name]) = movement_step;
-    std::get<3>(joints_movments_map[joint_name]) = start + movement_step;
+    std::get<0>(joints_movements_map[joint_name]) = start;
+    std::get<1>(joints_movements_map[joint_name]) = goal;
+    std::get<2>(joints_movements_map[joint_name]) = movement_step;
+    std::get<3>(joints_movements_map[joint_name]) = start + movement_step;
 
     std::cout << "\t" << joint_name << ": " << start << ", " << goal << ", " << movement_step << std::endl;
   }
@@ -421,7 +441,7 @@ bool JogControlPanel::generateSimpleMotionPlan()
     // std::cout << "============================== " << std::endl
     //           << jog_time << std::endl;
 
-    for (auto it = joints_movments_map.begin(); it != joints_movments_map.end(); it++)
+    for (auto it = joints_movements_map.begin(); it != joints_movements_map.end(); it++)
     {
       const auto movement_step = std::get<2>(it->second);
 
@@ -471,9 +491,9 @@ void JogControlPanel::handleStopButton()
 
 void JogControlPanel::parseRobotDescription(const std::string &data)
 {
-  // cout << data.c_str() << endl;
   tinyxml2::XMLDocument doc;
   doc.Parse(data.c_str());
+  std::cout << __FUNCTION__ << "::" << data.c_str() << std::endl;
 
   const auto model_elem = doc.FirstChildElement("sdf")->FirstChildElement("model");
 
@@ -481,6 +501,7 @@ void JogControlPanel::parseRobotDescription(const std::string &data)
   {
     const auto joint_name = node->Attribute("name");
 
+    std::cout << __FUNCTION__ << "::" << joint_name << std::endl;
     const auto axis = node->FirstChildElement("axis");
     if (axis == nullptr)
       continue;
@@ -489,25 +510,15 @@ void JogControlPanel::parseRobotDescription(const std::string &data)
     if (axis_limit == nullptr)
       continue;
 
-    auto cmd_line_edit = std::get<1>(joints_map_[joint_name]);
-    auto validator = reinterpret_cast<const QDoubleValidator *>(cmd_line_edit->validator());
-    auto double_validator = const_cast<QDoubleValidator *>(validator);
-
-    auto slider = std::get<2>(joints_map_[joint_name]);
-
-    if (slider == nullptr || double_validator == nullptr)
-      continue;
-
     const auto lower_elem = axis_limit->FirstChildElement("lower");
-    const auto lower = ((lower_elem != nullptr) ? std::stod(lower_elem->GetText()) : -3.14f);
+    const auto lower = ((lower_elem != nullptr) ? std::stod(lower_elem->GetText()) : -M_PI);
 
     const auto upper_elem = axis_limit->FirstChildElement("upper");
-    const auto upper = ((upper_elem != nullptr) ? std::stod(upper_elem->GetText()) : 3.14f);
+    const auto upper = ((upper_elem != nullptr) ? std::stod(upper_elem->GetText()) : M_PI);
 
-    // cout << joint_name << " = " << lower << ", " << upper << endl;
-    slider->setRange(slider_decimal_fraction * lower, slider_decimal_fraction * upper);
-    double_validator->setBottom(lower);
-    double_validator->setTop(upper);
+    joints_range_map_[joint_name] = MinMax(lower, upper);
+
+    std::cout << __FUNCTION__ << "::" << joint_name << ", " << lower << "<->" << upper << std::endl;
   }
 }
 

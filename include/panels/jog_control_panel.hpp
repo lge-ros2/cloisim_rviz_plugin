@@ -6,6 +6,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSlider>
+#include <QtMath>
 #include <control_msgs/msg/joint_jog.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rviz_common/panel.hpp>
@@ -46,7 +47,7 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
   void moveThread();
 
  private:
-  static constexpr float slider_decimal_fraction = 1000.0;
+  static constexpr float kSliderDecimalFraction = 1000.0;
 
   bool is_run_thread_;
   bool is_move_joint_;
@@ -58,11 +59,24 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
     control_msgs::msg::JointJog jog_msg;
   };
 
+  struct MinMax
+  {
+    double min;
+    double max;
+
+    MinMax(const double min = -M_PI, const double max = M_PI)
+    {
+      this->min = min;
+      this->max = max;
+    }
+  };
+
   std::vector<MoveJointJog> move_msgs;
 
   std::thread move_thread_;
 
   std::map<std::string, std::tuple<QLineEdit *, QLineEdit *, QSlider *>> joints_map_;
+  std::map<std::string, MinMax> joints_range_map_;
 
   QFormLayout *form_;
 
