@@ -20,9 +20,10 @@ using std::string;
 
 JogControlPanel::JogControlPanel(QWidget *parent)
     : rviz_common::Panel(parent)
-  , worker_running_(true)
-  , motion_active_(false)
+    , worker_running_(true)
+    , motion_active_(false)
     , move_start_time_(0)
+    , motion_timer_(nullptr)
     , form_(nullptr)
     , namespace_topic_edit_(nullptr)
     , robot_desc_topic_edit_(nullptr)
@@ -37,12 +38,8 @@ JogControlPanel::JogControlPanel(QWidget *parent)
 
 JogControlPanel::~JogControlPanel()
 {
-  handleStopButton();
-
   worker_running_ = false;
-
-  if (move_thread_.joinable())
-    move_thread_.join();
+  handleStopButton();
 }
 
 void JogControlPanel::onInitialize()
@@ -57,11 +54,9 @@ void JogControlPanel::onInitialize()
 
   resetPublisherJointCommand();
 
-  move_thread_ = std::thread(
-      [this]()
-      {
-        moveThread();
-      });
+  motion_timer_ = new QTimer(this);
+  motion_timer_->setInterval(10);
+  connect(motion_timer_, &QTimer::timeout, this, &JogControlPanel::processMotionQueue);
 }
 
 void JogControlPanel::resetSubscriptionJointStates()
@@ -340,38 +335,34 @@ void JogControlPanel::handleSetButton()
   pub_joint_jog_->publish(msg);
 }
 
-void JogControlPanel::moveThread()
+void JogControlPanel::processMotionQueue()
 {
   auto raw_node = getDisplayContext()->getRosNodeAbstraction().lock()->get_raw_node();
 
-  while (worker_running_)
+  if (worker_running_ == false)
   {
-    if (motion_active_ == false ||
-        planned_motion_.size() == 0)
-    {
-      std::this_thread::sleep_for(100us);
-      continue;
-    }
-
-    auto move_msg = planned_motion_.back();
-
-    const auto time_now = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
-
-    // std::cout << "running thread " << planned_motion_.back().time << ", " << (time_now - move_start_time_) << std::endl;
-
-    if (time_now - move_start_time_ > planned_motion_.back().time)
-    {
-      move_msg.jog_msg.header.stamp = raw_node->now();
-      pub_joint_jog_->publish(move_msg.jog_msg);
-      std::this_thread::sleep_for(10ms);
-      planned_motion_.pop_back();
-    }
-
-    if (planned_motion_.size() == 0)
-      handleStopButton();
-
-    std::this_thread::sleep_for(1us);
+    if (motion_timer_ != nullptr)
+      motion_timer_->stop();
+    return;
   }
+
+  if (motion_active_ == false ||
+      planned_motion_.empty())
+    return;
+
+  auto move_msg = planned_motion_.back();
+
+  const auto time_now = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+  if (time_now - move_start_time_ > planned_motion_.back().time)
+  {
+    move_msg.jog_msg.header.stamp = raw_node->now();
+    pub_joint_jog_->publish(move_msg.jog_msg);
+    planned_motion_.pop_back();
+  }
+
+  if (planned_motion_.empty())
+    handleStopButton();
 }
 
 bool JogControlPanel::generateSimpleMotionPlan()
@@ -448,6 +439,8 @@ void JogControlPanel::handleMoveButton()
     move_btn_->setEnabled(false);
     motion_active_ = true;
     move_start_time_ = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
+    if (motion_timer_ != nullptr)
+      motion_timer_->start();
   }
   else
   {
@@ -462,6 +455,9 @@ void JogControlPanel::handleStopButton()
   std::cout << "Stop Move" << std::endl;
   motion_active_ = false;
   move_start_time_ = 0;
+  planned_motion_.clear();
+  if (motion_timer_ != nullptr)
+    motion_timer_->stop();
   move_btn_->setEnabled(true);
 }
 

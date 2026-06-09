@@ -6,6 +6,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSlider>
+#include <QTimer>
 #include <QtMath>
 #include <control_msgs/msg/joint_jog.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -44,7 +45,7 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
   void resetPublisherJointCommand();
   void resetSubscriptionRobotDesc();
 
-  void moveThread();
+  void processMotionQueue();
 
  private:
   static constexpr float kSliderDecimalFraction = 1000.0;
@@ -80,7 +81,7 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
 
   std::vector<MoveJointJog> planned_motion_;
 
-  std::thread move_thread_;
+  QTimer *motion_timer_;
 
   std::map<std::string, JointWidgets> joints_map_;
   std::map<std::string, MinMax> joints_range_map_;
