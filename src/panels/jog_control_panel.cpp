@@ -39,30 +39,6 @@ JogControlPanel::~JogControlPanel()
 {
   handleStopButton();
 
-  delete form_;
-  form_ = nullptr;
-
-  delete namespace_topic_edit_;
-  namespace_topic_edit_ = nullptr;
-
-  delete robot_desc_topic_edit_;
-  robot_desc_topic_edit_ = nullptr;
-
-  delete joint_state_topic_edit_;
-  joint_state_topic_edit_ = nullptr;
-
-  delete joint_command_topic_edit_;
-  joint_command_topic_edit_ = nullptr;
-
-  delete control_freq_line_edit_;
-  control_freq_line_edit_ = nullptr;
-
-  delete move_duration_line_edit_;
-  move_duration_line_edit_ = nullptr;
-
-  delete move_btn_;
-  move_btn_ = nullptr;
-
   is_run_thread_ = false;
 
   if (move_thread_.joinable())
