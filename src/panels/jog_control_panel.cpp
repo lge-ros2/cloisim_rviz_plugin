@@ -1,5 +1,6 @@
 #include "panels/jog_control_panel.hpp"
 #include <QDoubleValidator>
+#include <QFrame>
 #include <QGroupBox>
 #include <QIntValidator>
 #include <QLabel>
@@ -24,6 +25,7 @@ JogControlPanel::JogControlPanel(QWidget *parent)
     , motion_active_(false)
     , move_start_time_(0)
     , motion_timer_(nullptr)
+    , joint_rows_layout_(nullptr)
     , form_(nullptr)
     , namespace_topic_edit_(nullptr)
     , robot_desc_topic_edit_(nullptr)
@@ -31,7 +33,9 @@ JogControlPanel::JogControlPanel(QWidget *parent)
     , joint_command_topic_edit_(nullptr)
     , control_freq_line_edit_(nullptr)
     , move_duration_line_edit_(nullptr)
+    , apply_now_btn_(nullptr)
     , move_btn_(nullptr)
+    , stop_btn_(nullptr)
 {
   initializeLayout();
 }
@@ -63,8 +67,18 @@ void JogControlPanel::resetSubscriptionJointStates()
 {
   auto raw_node = getDisplayContext()->getRosNodeAbstraction().lock()->get_raw_node();
 
-  for (auto i = 1; i < form_->rowCount(); i++)
-    form_->removeRow(i);
+  while (joint_rows_layout_ != nullptr && joint_rows_layout_->count() > 0)
+  {
+    auto item = joint_rows_layout_->takeAt(0);
+    if (item == nullptr)
+      continue;
+
+    if (item->layout() != nullptr)
+      delete item->layout();
+    delete item;
+  }
+
+  joints_map_.clear();
 
   sub_joint_states_.reset();
   sub_joint_states_ = raw_node->create_subscription<sensor_msgs::msg::JointState>(
@@ -137,47 +151,41 @@ void JogControlPanel::initializeLayout()
 
   auto groupBoxC = new QGroupBox("Joints States && Command");
   {
-    form_ = new QFormLayout();
-    form_->setContentsMargins(5, 5, 5, 5);
-
     auto title_font = font();
     title_font.setBold(true);
 
-    auto label_col1 = new QLabel("States\n(Read-only)");
+    auto label_col1 = new QLabel("Current\n(Read-only)");
     label_col1->setFont(title_font);
     label_col1->setAlignment(Qt::AlignCenter);
-    auto label_col2 = new QLabel("Command");
+    auto label_col2 = new QLabel("Target");
     label_col2->setFont(title_font);
     label_col2->setAlignment(Qt::AlignCenter);
-    auto label_col3 = new QLabel("");
-    label_col3->setFont(title_font);
-    label_col3->setAlignment(Qt::AlignCenter);
 
     auto joint_name_title = new QLabel("Joint Name");
     joint_name_title->setFont(title_font);
     joint_name_title->setAlignment(Qt::AlignCenter);
 
-    auto form_first_row = new QHBoxLayout();
-    form_first_row->addWidget(label_col1);
-    form_first_row->addWidget(label_col2);
-    form_first_row->addWidget(label_col3);
+    auto joint_header_layout = new QHBoxLayout();
+    joint_header_layout->setContentsMargins(5, 5, 5, 0);
+    joint_header_layout->setSpacing(6);
+    joint_header_layout->addWidget(joint_name_title, 1);
+    joint_header_layout->addWidget(label_col1, 1);
+    joint_header_layout->addWidget(label_col2, 3);
 
-    form_->addRow(joint_name_title, form_first_row);
-
-    auto reset_btn = new QPushButton(tr("Reset to current state"));
+    auto reset_btn = new QPushButton(tr("Center Targets"));
     reset_btn->setStyleSheet(button_style);
     reset_btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-    connect(reset_btn, &QPushButton::released, this, &JogControlPanel::handleResetLastStateButton);
+    connect(reset_btn, &QPushButton::released, this, &JogControlPanel::handleCenterTargetsButton);
 
-    auto reset_zero_btn = new QPushButton(tr("Reset to zero"));
+    auto reset_zero_btn = new QPushButton(tr("Zero All"));
     reset_zero_btn->setStyleSheet(button_style);
     reset_zero_btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
     connect(reset_zero_btn, &QPushButton::released, this, &JogControlPanel::handleResetZeroButton);
 
-    auto set_btn = new QPushButton(tr("Set"));
-    set_btn->setStyleSheet(button_style);
-    set_btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-    connect(set_btn, &QPushButton::released, this, &JogControlPanel::handleSetButton);
+    apply_now_btn_ = new QPushButton(tr("Apply Now"));
+    apply_now_btn_->setStyleSheet(button_style);
+    apply_now_btn_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+    connect(apply_now_btn_, &QPushButton::released, this, &JogControlPanel::handleSetButton);
 
     move_duration_line_edit_ = new QLineEdit(QString::number(5));
     move_duration_line_edit_->setValidator(new QDoubleValidator(0, 1000000, 2, move_duration_line_edit_));
@@ -185,31 +193,85 @@ void JogControlPanel::initializeLayout()
     control_freq_line_edit_ = new QLineEdit(QString::number(50));
     control_freq_line_edit_->setValidator(new QIntValidator(1, 100, control_freq_line_edit_));
 
-    auto move_form = new QFormLayout();
-    move_form->setContentsMargins(5, 20, 5, 0);
-    move_form->addRow(tr("Control Frequency:"), control_freq_line_edit_);
-    move_form->addRow(tr("Move Duration:"), move_duration_line_edit_);
+    auto move_inputs_row = new QHBoxLayout();
+    move_inputs_row->setContentsMargins(5, 8, 5, 0);
+    move_inputs_row->setSpacing(6);
+
+    auto control_freq_label = new QLabel(tr("Control Frequency"));
+    control_freq_label->setAlignment(Qt::AlignVCenter | Qt::AlignRight);
+    control_freq_line_edit_->setMaximumWidth(64);
+
+    auto move_duration_label = new QLabel(tr("Duration"));
+    move_duration_label->setAlignment(Qt::AlignVCenter | Qt::AlignRight);
+    move_duration_line_edit_->setMaximumWidth(64);
+
+    move_inputs_row->addWidget(control_freq_label);
+    move_inputs_row->addWidget(control_freq_line_edit_);
+    move_inputs_row->addSpacing(8);
+    move_inputs_row->addWidget(move_duration_label);
+    move_inputs_row->addWidget(move_duration_line_edit_);
+    move_inputs_row->addStretch(1);
 
     move_btn_ = new QPushButton(tr("Move"));
     move_btn_->setStyleSheet(button_style);
     move_btn_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
     connect(move_btn_, &QPushButton::released, this, &JogControlPanel::handleMoveButton);
 
-    auto stop_btn = new QPushButton(tr("Stop"));
-    stop_btn->setStyleSheet(button_style);
-    stop_btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-    connect(stop_btn, &QPushButton::released, this, &JogControlPanel::handleStopButton);
+    stop_btn_ = new QPushButton(tr("Stop"));
+    stop_btn_->setStyleSheet(button_style);
+    stop_btn_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+    stop_btn_->setEnabled(false);
+    connect(stop_btn_, &QPushButton::released, this, &JogControlPanel::handleStopButton);
+
+    joint_rows_layout_ = new QVBoxLayout();
+    joint_rows_layout_->setContentsMargins(5, 5, 5, 5);
+    joint_rows_layout_->setSpacing(4);
+    joint_rows_layout_->setAlignment(Qt::AlignTop);
+
+    auto joint_rows_widget = new QWidget();
+    joint_rows_widget->setLayout(joint_rows_layout_);
+
+    auto joint_rows_scroll_area = new QScrollArea();
+    joint_rows_scroll_area->setWidget(joint_rows_widget);
+    joint_rows_scroll_area->setWidgetResizable(true);
+    joint_rows_scroll_area->setFrameShape(QFrame::NoFrame);
+    joint_rows_scroll_area->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    joint_rows_scroll_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    joint_rows_scroll_area->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+    auto target_helper_row = new QHBoxLayout();
+    target_helper_row->setContentsMargins(0, 0, 0, 0);
+    target_helper_row->setSpacing(6);
+    target_helper_row->addWidget(reset_btn);
+    target_helper_row->addStretch(1);
+    target_helper_row->addWidget(reset_zero_btn);
+
+    auto motion_action_row = new QHBoxLayout();
+    motion_action_row->setContentsMargins(0, 0, 0, 0);
+    motion_action_row->setSpacing(6);
+    motion_action_row->addWidget(move_btn_);
+    motion_action_row->addWidget(stop_btn_);
+
+    apply_now_btn_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+
+    auto move_group = new QGroupBox(tr("Timed Motion"));
+    move_group->setStyleSheet(group_style);
+
+    auto move_group_layout = new QVBoxLayout();
+    move_group_layout->setContentsMargins(3, 3, 3, 3);
+    move_group_layout->setSpacing(6);
+    move_group_layout->addLayout(move_inputs_row);
+    move_group_layout->addLayout(motion_action_row);
+    move_group->setLayout(move_group_layout);
 
     auto joint_command_vbox = new QVBoxLayout();
     joint_command_vbox->setContentsMargins(3, 3, 3, 3);
     joint_command_vbox->setAlignment(Qt::AlignTop);
-    joint_command_vbox->addWidget(reset_btn);
-    joint_command_vbox->addWidget(reset_zero_btn);
-    joint_command_vbox->addWidget(set_btn);
-    joint_command_vbox->addLayout(move_form);
-    joint_command_vbox->addWidget(move_btn_);
-    joint_command_vbox->addWidget(stop_btn);
-    joint_command_vbox->addLayout(form_);
+    joint_command_vbox->addWidget(apply_now_btn_);
+    joint_command_vbox->addWidget(move_group);
+    joint_command_vbox->addLayout(joint_header_layout);
+    joint_command_vbox->addWidget(joint_rows_scroll_area, 1);
+    joint_command_vbox->addLayout(target_helper_row);
 
     groupBoxC->setLayout(joint_command_vbox);
     groupBoxC->setAlignment(Qt::AlignTop);
@@ -219,22 +281,8 @@ void JogControlPanel::initializeLayout()
   auto main_layout = new QVBoxLayout();
   main_layout->setContentsMargins(3, 3, 3, 3);
   main_layout->addWidget(groupBoxA);
-  main_layout->addWidget(groupBoxC);
-
-  auto scrollarea_widget = new QWidget();
-  scrollarea_widget->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
-  scrollarea_widget->setLayout(main_layout);
-
-  auto main_scroll_area = new QScrollArea();
-  main_scroll_area->setWidget(scrollarea_widget);
-  main_scroll_area->setFrameShape(QFrame::NoFrame);
-  main_scroll_area->setWidgetResizable(true);
-  main_scroll_area->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
-  main_scroll_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-
-  auto scroll_container = new QVBoxLayout();
-  scroll_container->addWidget(main_scroll_area);
-  setLayout(scroll_container);
+  main_layout->addWidget(groupBoxC, 1);
+  setLayout(main_layout);
 }
 
 void JogControlPanel::handleJointStates(sensor_msgs::msg::JointState::ConstSharedPtr msg)
@@ -280,13 +328,13 @@ void JogControlPanel::handleJointStates(sensor_msgs::msg::JointState::ConstShare
 
       auto cmd_line_edit = new QLineEdit(QString::number(joint_position));
       cmd_line_edit->setValidator(new QDoubleValidator(-6.28, 6.28, 3, cmd_line_edit));
-      cmd_line_edit->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Minimum);
-      cmd_line_edit->setMinimumWidth(25);
+      cmd_line_edit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
       joints_map_[joint_name].command_edit = cmd_line_edit;
 
       auto slider = new QSlider(Qt::Horizontal);
       slider->setRange(-M_PI * kSliderDecimalFraction, M_PI * kSliderDecimalFraction);
       slider->setValue(joint_position * kSliderDecimalFraction);
+      slider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
       slider->setSingleStep(1);
       connect(slider, &QSlider::valueChanged,
               [cmd_line_edit](const int &val) -> void
@@ -295,11 +343,33 @@ void JogControlPanel::handleJointStates(sensor_msgs::msg::JointState::ConstShare
               });
       joints_map_[joint_name].slider = slider;
 
+      auto name_label = new QLabel(tr(joint_name.c_str()));
+      name_label->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
+
+      auto target_layout = new QVBoxLayout();
+      target_layout->setContentsMargins(0, 0, 0, 0);
+      target_layout->setSpacing(2);
+      target_layout->addWidget(cmd_line_edit);
+      target_layout->addWidget(slider);
+
+      auto target_widget = new QWidget();
+      target_widget->setLayout(target_layout);
+
       auto form_row = new QHBoxLayout();
-      form_row->addWidget(pos_line_edit);
-      form_row->addWidget(cmd_line_edit);
-      form_row->addWidget(slider);
-      form_->addRow(tr(joint_name.c_str()), form_row);
+      form_row->setContentsMargins(0, 0, 0, 0);
+      form_row->setSpacing(6);
+      form_row->addWidget(name_label, 1);
+      form_row->addWidget(pos_line_edit, 1);
+      form_row->addWidget(target_widget, 3);
+      joint_rows_layout_->addLayout(form_row);
+
+      auto divider = new QFrame();
+      divider->setFrameShape(QFrame::HLine);
+      divider->setFrameShadow(QFrame::Plain);
+      divider->setLineWidth(1);
+      divider->setContentsMargins(0, 5, 0, 5);
+      divider->setStyleSheet("color: rgba(180, 180, 180, 95);");
+      joint_rows_layout_->addWidget(divider);
     }
 
     if (pos_line_edit != nullptr)
@@ -307,15 +377,21 @@ void JogControlPanel::handleJointStates(sensor_msgs::msg::JointState::ConstShare
   }
 }
 
-void JogControlPanel::handleResetLastStateButton()
+void JogControlPanel::handleCenterTargetsButton()
 {
   for (auto it = joints_map_.begin(); it != joints_map_.end(); it++)
   {
-    const auto state_line_edit = it->second.state_edit;
     auto cmd_line_edit = it->second.command_edit;
-    cmd_line_edit->setText(state_line_edit->text());
     auto slider = it->second.slider;
-    slider->setValue(state_line_edit->text().toDouble() * kSliderDecimalFraction);
+
+    auto range_it = joints_range_map_.find(it->first);
+    const auto min_value = (range_it != joints_range_map_.end()) ? range_it->second.min : -M_PI;
+    const auto max_value = (range_it != joints_range_map_.end()) ? range_it->second.max : M_PI;
+    const auto midpoint = (min_value + max_value) * 0.5;
+
+    cmd_line_edit->setText(QString::number(midpoint));
+    if (slider != nullptr)
+      slider->setValue(midpoint * kSliderDecimalFraction);
   }
 }
 
@@ -330,10 +406,12 @@ void JogControlPanel::handleResetZeroButton()
 
 void JogControlPanel::handleSetButton()
 {
+  if (motion_active_)
+    return;
+
   auto raw_node = getDisplayContext()->getRosNodeAbstraction().lock()->get_raw_node();
 
   control_msgs::msg::JointJog msg;
-
   msg.header.stamp = raw_node->now();
 
   for (auto it = joints_map_.begin(); it != joints_map_.end(); it++)
@@ -448,6 +526,10 @@ void JogControlPanel::handleMoveButton()
   if (generateSimpleMotionPlan())
   {
     move_btn_->setEnabled(false);
+    if (apply_now_btn_ != nullptr)
+      apply_now_btn_->setEnabled(false);
+    if (stop_btn_ != nullptr)
+      stop_btn_->setEnabled(true);
     motion_active_ = true;
     move_start_time_ = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
     if (motion_timer_ != nullptr)
@@ -470,6 +552,10 @@ void JogControlPanel::handleStopButton()
   if (motion_timer_ != nullptr)
     motion_timer_->stop();
   move_btn_->setEnabled(true);
+  if (apply_now_btn_ != nullptr)
+    apply_now_btn_->setEnabled(true);
+  if (stop_btn_ != nullptr)
+    stop_btn_->setEnabled(false);
 }
 
 void JogControlPanel::parseRobotDescription(const std::string &data)

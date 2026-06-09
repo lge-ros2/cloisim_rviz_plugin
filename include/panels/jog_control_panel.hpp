@@ -5,8 +5,10 @@
 #include <QHBoxLayout>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSlider>
 #include <QTimer>
+#include <QVBoxLayout>
 #include <QtMath>
 #include <control_msgs/msg/joint_jog.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -31,7 +33,7 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
   void initializeLayout();
 
   void handleJointStates(sensor_msgs::msg::JointState::ConstSharedPtr msg);
-  void handleResetLastStateButton();
+  void handleCenterTargetsButton();
   void handleResetZeroButton();
   void handleSetButton();
   void handleMoveButton();
@@ -86,6 +88,7 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
   std::map<std::string, JointWidgets> joints_map_;
   std::map<std::string, MinMax> joints_range_map_;
 
+  QVBoxLayout *joint_rows_layout_;
   QFormLayout *form_;
 
   QLineEdit *namespace_topic_edit_;
@@ -96,7 +99,9 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
   QLineEdit *control_freq_line_edit_;
   QLineEdit *move_duration_line_edit_;
 
+  QPushButton *apply_now_btn_;
   QPushButton *move_btn_;
+  QPushButton *stop_btn_;
 
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr sub_joint_states_;
 
