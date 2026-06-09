@@ -241,13 +241,13 @@ void JogControlPanel::handleJointStates(sensor_msgs::msg::JointState::ConstShare
 
     if (joints_map_.count(joint_name) > 0)
     {
-      pos_line_edit = std::get<0>(joints_map_[joint_name]);
+      pos_line_edit = joints_map_[joint_name].state_edit;
 
       if (joints_range_map_.find(joint_name) != joints_range_map_.end())
       {
         const auto joint_minmax = joints_range_map_[joint_name];
 
-        auto cmd_line_edit = std::get<1>(joints_map_[joint_name]);
+        auto cmd_line_edit = joints_map_[joint_name].command_edit;
         if (cmd_line_edit != nullptr)
         {
           auto validator = reinterpret_cast<const QDoubleValidator *>(cmd_line_edit->validator());
@@ -256,7 +256,7 @@ void JogControlPanel::handleJointStates(sensor_msgs::msg::JointState::ConstShare
           double_validator->setTop(joint_minmax.max);
         }
 
-        auto slider = std::get<2>(joints_map_[joint_name]);
+        auto slider = joints_map_[joint_name].slider;
         if (slider != nullptr)
         {
           slider->setRange(kSliderDecimalFraction * joint_minmax.min, kSliderDecimalFraction * joint_minmax.max);
@@ -270,13 +270,13 @@ void JogControlPanel::handleJointStates(sensor_msgs::msg::JointState::ConstShare
       pos_line_edit->setFocusPolicy(Qt::ClickFocus);
       pos_line_edit->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Minimum);
       pos_line_edit->setMinimumWidth(25);
-      std::get<0>(joints_map_[joint_name]) = pos_line_edit;
+      joints_map_[joint_name].state_edit = pos_line_edit;
 
       auto cmd_line_edit = new QLineEdit(QString::number(joint_position));
       cmd_line_edit->setValidator(new QDoubleValidator(-6.28, 6.28, 3, cmd_line_edit));
       cmd_line_edit->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Minimum);
       cmd_line_edit->setMinimumWidth(25);
-      std::get<1>(joints_map_[joint_name]) = cmd_line_edit;
+      joints_map_[joint_name].command_edit = cmd_line_edit;
 
       auto slider = new QSlider(Qt::Horizontal);
       slider->setRange(-M_PI * kSliderDecimalFraction, M_PI * kSliderDecimalFraction);
@@ -287,7 +287,7 @@ void JogControlPanel::handleJointStates(sensor_msgs::msg::JointState::ConstShare
               {
                 cmd_line_edit->setText(QString::number(val / kSliderDecimalFraction));
               });
-      std::get<2>(joints_map_[joint_name]) = slider;
+      joints_map_[joint_name].slider = slider;
 
       auto form_row = new QHBoxLayout();
       form_row->addWidget(pos_line_edit);
@@ -305,10 +305,10 @@ void JogControlPanel::handleResetLastStateButton()
 {
   for (auto it = joints_map_.begin(); it != joints_map_.end(); it++)
   {
-    const auto state_line_edit = std::get<0>(it->second);
-    auto cmd_line_edit = std::get<1>(it->second);
+    const auto state_line_edit = it->second.state_edit;
+    auto cmd_line_edit = it->second.command_edit;
     cmd_line_edit->setText(state_line_edit->text());
-    auto slider = std::get<2>(it->second);
+    auto slider = it->second.slider;
     slider->setValue(state_line_edit->text().toDouble() * kSliderDecimalFraction);
   }
 }
@@ -317,7 +317,7 @@ void JogControlPanel::handleResetZeroButton()
 {
   for (auto it = joints_map_.begin(); it != joints_map_.end(); it++)
   {
-    auto slider = std::get<2>(it->second);
+    auto slider = it->second.slider;
     slider->setValue(0 * kSliderDecimalFraction);
   }
 }
@@ -332,7 +332,7 @@ void JogControlPanel::handleSetButton()
 
   for (auto it = joints_map_.begin(); it != joints_map_.end(); it++)
   {
-    const auto line_edit = std::get<1>(it->second);
+    const auto line_edit = it->second.command_edit;
     msg.joint_names.push_back(it->first);
     msg.displacements.push_back(line_edit->text().toDouble());
   }
@@ -390,9 +390,9 @@ bool JogControlPanel::generateSimpleMotionPlan()
   for (auto it = joints_map_.begin(); it != joints_map_.end(); it++)
   {
     const auto joint_name = it->first;
-    const auto last_state_line_edit = std::get<0>(it->second);
+    const auto last_state_line_edit = it->second.state_edit;
     const auto start = last_state_line_edit->text().toDouble();
-    const auto command_line_edit = std::get<1>(it->second);
+    const auto command_line_edit = it->second.command_edit;
     const auto goal = command_line_edit->text().toDouble();
 
     const double diff = (goal >= start) ? (goal - start) : (start - goal);

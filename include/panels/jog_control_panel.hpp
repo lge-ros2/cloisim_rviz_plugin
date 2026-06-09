@@ -71,11 +71,18 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
     }
   };
 
+  struct JointWidgets
+  {
+    QLineEdit *state_edit = nullptr;
+    QLineEdit *command_edit = nullptr;
+    QSlider *slider = nullptr;
+  };
+
   std::vector<MoveJointJog> planned_motion_;
 
   std::thread move_thread_;
 
-  std::map<std::string, std::tuple<QLineEdit *, QLineEdit *, QSlider *>> joints_map_;
+  std::map<std::string, JointWidgets> joints_map_;
   std::map<std::string, MinMax> joints_range_map_;
 
   QFormLayout *form_;
