@@ -93,7 +93,10 @@
         "qformlayout": "cpp",
         "qintvalidator": "cpp",
         "qdoublevalidator": "cpp",
-        "qgroupbox": "cpp"
+        "qgroupbox": "cpp",
+        "format": "cpp",
+        "charconv": "cpp",
+        "span": "cpp"
     },
     "cmake.sourceDirectory": "${workspaceFolder}/cloisim_ros_actor",
     "githubPullRequests.ignoredPullRequestBranches": [
