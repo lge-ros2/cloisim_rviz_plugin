@@ -492,33 +492,56 @@ void JogControlPanel::handleStopButton()
 void JogControlPanel::parseRobotDescription(const std::string &data)
 {
   tinyxml2::XMLDocument doc;
-  doc.Parse(data.c_str());
-  std::cout << __FUNCTION__ << "::" << data.c_str() << std::endl;
+  const auto parse_result = doc.Parse(data.c_str());
+  if (parse_result != tinyxml2::XML_SUCCESS)
+  {
+    ERROR_STREAM(rclcpp::get_logger("JogControlPanel"),
+                 "Failed to parse robot_description XML: " << doc.ErrorStr());
+    return;
+  }
 
-  const auto model_elem = doc.FirstChildElement("sdf")->FirstChildElement("model");
+  joints_range_map_.clear();
 
-  for (auto node = model_elem->FirstChildElement("joint"); node; node = node->NextSiblingElement("joint"))
+  auto *robot_elem = doc.FirstChildElement("robot");
+  if (robot_elem == nullptr)
+  {
+    ERROR_STREAM(rclcpp::get_logger("JogControlPanel"),
+                 "robot_description root is not URDF <robot>");
+    return;
+  }
+
+  for (auto *node = robot_elem->FirstChildElement("joint"); node; node = node->NextSiblingElement("joint"))
   {
     const auto joint_name = node->Attribute("name");
-
-    std::cout << __FUNCTION__ << "::" << joint_name << std::endl;
-    const auto axis = node->FirstChildElement("axis");
-    if (axis == nullptr)
+    if (joint_name == nullptr)
       continue;
 
-    const auto axis_limit = axis->FirstChildElement("limit");
-    if (axis_limit == nullptr)
+    const auto joint_type = node->Attribute("type");
+    if (joint_type == nullptr)
       continue;
 
-    const auto lower_elem = axis_limit->FirstChildElement("lower");
-    const auto lower = ((lower_elem != nullptr) ? std::stod(lower_elem->GetText()) : -M_PI);
+    if (std::strcmp(joint_type, "fixed") == 0 ||
+        std::strcmp(joint_type, "floating") == 0 ||
+        std::strcmp(joint_type, "planar") == 0)
+      continue;
 
-    const auto upper_elem = axis_limit->FirstChildElement("upper");
-    const auto upper = ((upper_elem != nullptr) ? std::stod(upper_elem->GetText()) : M_PI);
+    if (std::strcmp(joint_type, "continuous") == 0)
+    {
+      joints_range_map_[joint_name] = MinMax(-M_PI, M_PI);
+      continue;
+    }
+
+    const auto *limit = node->FirstChildElement("limit");
+    if (limit == nullptr)
+      continue;
+
+    const auto *lower_attr = limit->Attribute("lower");
+    const auto lower = ((lower_attr != nullptr) ? std::stod(lower_attr) : -M_PI);
+
+    const auto *upper_attr = limit->Attribute("upper");
+    const auto upper = ((upper_attr != nullptr) ? std::stod(upper_attr) : M_PI);
 
     joints_range_map_[joint_name] = MinMax(lower, upper);
-
-    std::cout << __FUNCTION__ << "::" << joint_name << ", " << lower << "<->" << upper << std::endl;
   }
 }
 
