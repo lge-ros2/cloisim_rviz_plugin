@@ -49,8 +49,8 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
  private:
   static constexpr float kSliderDecimalFraction = 1000.0;
 
-  bool is_run_thread_;
-  bool is_move_joint_;
+  bool worker_running_;
+  bool motion_active_;
   double move_start_time_;
 
   struct MoveJointJog
@@ -71,7 +71,7 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
     }
   };
 
-  std::vector<MoveJointJog> move_msgs;
+  std::vector<MoveJointJog> planned_motion_;
 
   std::thread move_thread_;
 
@@ -94,7 +94,7 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
 
   rclcpp::Publisher<control_msgs::msg::JointJog>::SharedPtr pub_joint_jog_;
 
-  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr pub_robot_desc_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_robot_desc_;
 };
 
 }  // namespace cloisim_rviz_plugin
