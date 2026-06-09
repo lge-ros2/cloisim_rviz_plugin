@@ -99,7 +99,7 @@ rviz2
 
 ## RViz Screenshot
 
-![RViz screenshot](https://github.com/lge-ros2/cloisim_rviz_plugin/assets/21001946/9de7d9b1-4377-40f1-a8b4-7b19ca03782e)
+<img width="478" height="702" alt="image" src="https://github.com/user-attachments/assets/d6bc19f4-1245-4e8f-a7d2-0939eee3f9b3" />
 
 ## Development Notes
 
