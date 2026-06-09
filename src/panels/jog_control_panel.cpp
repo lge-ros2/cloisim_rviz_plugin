@@ -140,18 +140,29 @@ void JogControlPanel::initializeLayout()
     form_ = new QFormLayout();
     form_->setContentsMargins(5, 5, 5, 5);
 
+    auto title_font = font();
+    title_font.setBold(true);
+
     auto label_col1 = new QLabel("States\n(Read-only)");
+    label_col1->setFont(title_font);
     label_col1->setAlignment(Qt::AlignCenter);
     auto label_col2 = new QLabel("Command");
+    label_col2->setFont(title_font);
     label_col2->setAlignment(Qt::AlignCenter);
     auto label_col3 = new QLabel("");
+    label_col3->setFont(title_font);
+    label_col3->setAlignment(Qt::AlignCenter);
+
+    auto joint_name_title = new QLabel("Joint Name");
+    joint_name_title->setFont(title_font);
+    joint_name_title->setAlignment(Qt::AlignCenter);
 
     auto form_first_row = new QHBoxLayout();
     form_first_row->addWidget(label_col1);
     form_first_row->addWidget(label_col2);
     form_first_row->addWidget(label_col3);
 
-    form_->addRow(tr("Joint Name"), form_first_row);
+    form_->addRow(joint_name_title, form_first_row);
 
     auto reset_btn = new QPushButton(tr("Reset to current state"));
     reset_btn->setStyleSheet(button_style);
