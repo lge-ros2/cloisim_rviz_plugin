@@ -62,8 +62,8 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
 
   void processMotionQueue();
 
-  void tryCreateInteractiveMarker(const std::string &joint_name);
-  void createInteractiveMarker(const std::string &joint_name);
+  void tryCreateInteractiveMarker(const std::string &joint_name, bool apply_changes = true);
+  void createInteractiveMarker(const std::string &joint_name, bool apply_changes = true);
   void handleInteractiveMarkerFeedback(
     const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback);
 

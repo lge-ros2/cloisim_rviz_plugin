@@ -134,10 +134,11 @@ void JogControlPanel::handleSimulationReset()
   handleStopButton();
 
   im_server_->clear();
-  im_server_->applyChanges();
 
   for (const auto &it : joints_map_)
-    tryCreateInteractiveMarker(it.first);
+    tryCreateInteractiveMarker(it.first, /*apply_changes=*/false);
+
+  im_server_->applyChanges();
 }
 
 void JogControlPanel::resetSubscriptionJointStates()
@@ -724,15 +725,15 @@ void JogControlPanel::parseRobotDescription(const std::string &data)
     tryCreateInteractiveMarker(it.first);
 }
 
-void JogControlPanel::tryCreateInteractiveMarker(const std::string &joint_name)
+void JogControlPanel::tryCreateInteractiveMarker(const std::string &joint_name, bool apply_changes)
 {
   if (!im_server_) return;
   if (joints_map_.find(joint_name) == joints_map_.end()) return;
   if (joints_info_map_.find(joint_name) == joints_info_map_.end()) return;
-  createInteractiveMarker(joint_name);
+  createInteractiveMarker(joint_name, apply_changes);
 }
 
-void JogControlPanel::createInteractiveMarker(const std::string &joint_name)
+void JogControlPanel::createInteractiveMarker(const std::string &joint_name, bool apply_changes)
 {
   const auto &info = joints_info_map_[joint_name];
   if (info.child_link.empty()) return;
@@ -786,7 +787,8 @@ void JogControlPanel::createInteractiveMarker(const std::string &joint_name)
                      {
                        handleInteractiveMarkerFeedback(fb);
                      });
-  im_server_->applyChanges();
+  if (apply_changes)
+    im_server_->applyChanges();
 }
 
 void JogControlPanel::handleInteractiveMarkerFeedback(
