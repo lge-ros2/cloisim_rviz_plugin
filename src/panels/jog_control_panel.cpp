@@ -8,6 +8,7 @@
 #include <QScrollArea>
 #include <QSlider>
 #include <rviz_common/display_context.hpp>
+#include <rcl/time.h>
 #include <sstream>
 #include <tinyxml2.h>
 
@@ -97,6 +98,54 @@ void JogControlPanel::onInitialize()
   motion_timer_ = new QTimer(this);
   motion_timer_->setInterval(10);
   connect(motion_timer_, &QTimer::timeout, this, &JogControlPanel::processMotionQueue);
+
+  connect(this, &JogControlPanel::simulationResetDetected,
+          this, &JogControlPanel::handleSimulationReset,
+          Qt::QueuedConnection);
+
+  setupTimeJumpHandler();
+}
+
+void JogControlPanel::setupTimeJumpHandler()
+{
+  auto node_lock = getDisplayContext()->getRosNodeAbstraction().lock();
+  if (!node_lock) return;
+  auto raw_node = node_lock->get_raw_node();
+
+  rcl_jump_threshold_t threshold;
+  threshold.on_clock_change = true;
+  threshold.min_forward.nanoseconds = 0;
+  threshold.min_backward.nanoseconds = -1;
+
+  time_jump_handler_ = raw_node->get_clock()->create_jump_callback(
+      nullptr,
+      [this](const rcl_time_jump_t &jump)
+      {
+        if (jump.delta.nanoseconds < 0)
+          Q_EMIT simulationResetDetected();
+      },
+      threshold);
+}
+
+void JogControlPanel::handleSimulationReset()
+{
+  auto node_lock = getDisplayContext()->getRosNodeAbstraction().lock();
+  if (!node_lock) return;
+  auto raw_node = node_lock->get_raw_node();
+
+  handleStopButton();
+
+  if (im_server_)
+  {
+    im_server_->clear();
+    im_server_->applyChanges();
+  }
+
+  im_server_ = std::make_shared<interactive_markers::InteractiveMarkerServer>(
+      "jog_control_markers", raw_node);
+
+  for (const auto &it : joints_map_)
+    tryCreateInteractiveMarker(it.first);
 }
 
 void JogControlPanel::resetSubscriptionJointStates()

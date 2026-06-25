@@ -36,6 +36,12 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
  protected:
   void onInitialize() override;
 
+ Q_SIGNALS:
+  void simulationResetDetected();
+
+ private Q_SLOTS:
+  void handleSimulationReset();
+
  private:
   void initializeLayout();
 
@@ -60,6 +66,8 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
   void createInteractiveMarker(const std::string &joint_name);
   void handleInteractiveMarkerFeedback(
     const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback);
+
+  void setupTimeJumpHandler();
 
  private:
   static constexpr float kSliderDecimalFraction = 1000.0;
@@ -110,6 +118,7 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
   std::map<std::string, double> drag_start_angles_;
   std::map<std::string, geometry_msgs::msg::Pose> drag_start_poses_;
   std::shared_ptr<interactive_markers::InteractiveMarkerServer> im_server_;
+  rclcpp::JumpHandler::SharedPtr time_jump_handler_;
 
   QVBoxLayout *joint_rows_layout_;
   QFormLayout *form_;
