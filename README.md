@@ -118,6 +118,9 @@ Once the panel is running and `robot_description` is received, drag handles appe
 
 Dragging a handle updates the panel sliders and command values in real time and publishes a `JointJog` command. Joint limits from the URDF are respected.
 
+https://github.com/user-attachments/assets/a5fe2936-4cab-47bd-903f-d8f0d4be7489
+
+
 ## RViz Screenshot
 
 <img width="478" height="702" alt="image" src="https://github.com/user-attachments/assets/d6bc19f4-1245-4e8f-a7d2-0939eee3f9b3" />
