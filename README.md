@@ -5,8 +5,9 @@
 Current package scope:
 
 - one RViz panel plugin: `cloisim_rviz_plugin::JogControlPanel`
-- Qt5 Widgets-based panel UI
+- Qt5 Widgets-based panel UI with numeric sliders and direct viewport drag control
 - ROS 2 topic integration through the RViz node abstraction
+- Interactive Markers for per-joint drag handles in the RViz 3D viewport
 - plugin registration through `pluginlib`
 
 ## Current Panel
@@ -28,6 +29,7 @@ Practical behavior:
 - lets the operator type or slide target joint values
 - publishes one-shot `control_msgs/msg/JointJog` commands
 - can generate a simple time-based move sequence from current state to target state
+- places interactive drag handles in the RViz 3D viewport for each joint (revolute/continuous → yellow ring, prismatic → cyan arrow)
 
 ## Package Layout
 
@@ -58,6 +60,9 @@ This package depends on:
 - `control_msgs`
 - `std_msgs`
 - `TinyXML2`
+- `interactive_markers`
+- `visualization_msgs`
+- `geometry_msgs`
 
 Language/build constraints from the package today:
 
@@ -96,6 +101,22 @@ rviz2
 3. Add the `JogControlPanel` plugin from `cloisim_rviz_plugin`
 
 ![Add panel](https://github.com/lge-ros2/cloisim_rviz_plugin/assets/21001946/68516933-0a58-4cdd-a63d-43c84d30f632)
+
+## Interactive Viewport Joint Control
+
+Once the panel is running and `robot_description` is received, drag handles appear automatically on each joint in the 3D viewport.
+
+| Joint type | Marker | Interaction |
+|---|---|---|
+| revolute / continuous | Yellow flat cylinder (ring) | Rotate around joint axis |
+| prismatic | Cyan tall cylinder | Slide along joint axis |
+
+**To enable the markers in RViz:**
+
+1. Add Display → **InteractiveMarkers**
+2. Set **Update Topic** to `/jog_control_markers/update`
+
+Dragging a handle updates the panel sliders and command values in real time and publishes a `JointJog` command. Joint limits from the URDF are respected.
 
 ## RViz Screenshot
 
