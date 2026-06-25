@@ -120,6 +120,9 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
   std::shared_ptr<interactive_markers::InteractiveMarkerServer> im_server_;
   rclcpp::JumpHandler::SharedPtr time_jump_handler_;
 
+  bool have_last_joint_state_time_ = false;
+  rclcpp::Time last_joint_state_time_;
+
   QVBoxLayout *joint_rows_layout_;
   QFormLayout *form_;
 

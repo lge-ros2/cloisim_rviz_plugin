@@ -372,6 +372,18 @@ void JogControlPanel::initializeLayout()
 
 void JogControlPanel::handleJointStates(sensor_msgs::msg::JointState::ConstSharedPtr msg)
 {
+  const rclcpp::Time stamp(msg->header.stamp);
+  if (have_last_joint_state_time_ &&
+      stamp + rclcpp::Duration::from_seconds(0.5) < last_joint_state_time_)
+  {
+    // sim time jumped backward => simulation reset detected
+    last_joint_state_time_ = stamp;
+    Q_EMIT simulationResetDetected();
+    return;
+  }
+  have_last_joint_state_time_ = true;
+  last_joint_state_time_ = stamp;
+
   for (auto i = 0u; i < msg->name.size(); i++)
   {
     const auto &joint_name = msg->name[i];
