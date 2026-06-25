@@ -105,7 +105,26 @@ void JogControlPanel::onInitialize()
           this, &JogControlPanel::handleSimulationReset,
           Qt::QueuedConnection);
 
+  sub_clock_ = raw_node->create_subscription<rosgraph_msgs::msg::Clock>(
+      "/clock", rclcpp::ClockQoS(),
+      std::bind(&JogControlPanel::handleClock, this, std::placeholders::_1));
+
   setupTimeJumpHandler();
+}
+
+void JogControlPanel::handleClock(rosgraph_msgs::msg::Clock::ConstSharedPtr msg)
+{
+  const rclcpp::Time t(msg->clock);
+  if (have_last_clock_time_ &&
+      t + rclcpp::Duration::from_seconds(0.5) < last_clock_time_)
+  {
+    // /clock jumped backward => simulation reset detected
+    last_clock_time_ = t;
+    Q_EMIT simulationResetDetected();
+    return;
+  }
+  have_last_clock_time_ = true;
+  last_clock_time_ = t;
 }
 
 void JogControlPanel::setupTimeJumpHandler()

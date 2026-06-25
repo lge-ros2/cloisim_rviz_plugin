@@ -27,6 +27,7 @@ find_package(rviz_default_plugins REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(control_msgs REQUIRED)
+find_package(rosgraph_msgs REQUIRED)
 find_package(tinyxml2_vendor REQUIRED)
 find_package(TinyXML2)
 find_package(interactive_markers REQUIRED)
@@ -75,6 +76,7 @@ ament_target_dependencies(${PROJECT_NAME}
   std_msgs
   sensor_msgs
   control_msgs
+  rosgraph_msgs
   rviz_default_plugins
   tinyxml2_vendor
   TinyXML2

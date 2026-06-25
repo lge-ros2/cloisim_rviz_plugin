@@ -15,6 +15,7 @@
 #include <geometry_msgs/msg/pose.hpp>
 #include <interactive_markers/interactive_marker_server.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <rosgraph_msgs/msg/clock.hpp>
 #include <rviz_common/panel.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <std_msgs/msg/string.hpp>
@@ -46,6 +47,7 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
   void initializeLayout();
 
   void handleJointStates(sensor_msgs::msg::JointState::ConstSharedPtr msg);
+  void handleClock(rosgraph_msgs::msg::Clock::ConstSharedPtr msg);
   void handleCenterTargetsButton();
   void handleResetZeroButton();
   void handleSetButton();
@@ -122,6 +124,10 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
 
   bool have_last_joint_state_time_ = false;
   rclcpp::Time last_joint_state_time_;
+
+  rclcpp::Subscription<rosgraph_msgs::msg::Clock>::SharedPtr sub_clock_;
+  bool have_last_clock_time_ = false;
+  rclcpp::Time last_clock_time_;
 
   QVBoxLayout *joint_rows_layout_;
   QFormLayout *form_;
