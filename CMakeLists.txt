@@ -29,6 +29,9 @@ find_package(sensor_msgs REQUIRED)
 find_package(control_msgs REQUIRED)
 find_package(tinyxml2_vendor REQUIRED)
 find_package(TinyXML2)
+find_package(interactive_markers REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 ament_package_xml()
 
@@ -75,6 +78,9 @@ ament_target_dependencies(${PROJECT_NAME}
   rviz_default_plugins
   tinyxml2_vendor
   TinyXML2
+  interactive_markers
+  visualization_msgs
+  geometry_msgs
   )
 
 # Causes the visibility macros to use dllexport rather than dllimport,

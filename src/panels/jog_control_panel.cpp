@@ -8,6 +8,7 @@
 #include <QScrollArea>
 #include <QSlider>
 #include <rviz_common/display_context.hpp>
+#include <sstream>
 #include <tinyxml2.h>
 
 #define INFO_STREAM RCLCPP_INFO_STREAM
@@ -18,6 +19,37 @@ using namespace std::chrono_literals;
 using std::cout;
 using std::endl;
 using std::string;
+
+static geometry_msgs::msg::Quaternion axisToControlOrientation(double ax, double ay, double az)
+{
+  geometry_msgs::msg::Quaternion q;
+  q.w = 1.0;
+  q.x = 0.0;
+  q.y = 0.0;
+  q.z = 0.0;
+  const double len = std::sqrt(ax * ax + ay * ay + az * az);
+  if (len < 1e-9) return q;
+  ax /= len;
+  ay /= len;
+  az /= len;
+  const double dot = ax;  // dot({1,0,0}, {ax,ay,az})
+  if (dot > 1.0 - 1e-6) return q;
+  if (dot < -1.0 + 1e-6)
+  {
+    q.w = 0.0;
+    q.y = 1.0;
+    return q;
+  }
+  // cross({1,0,0}, {ax,ay,az}) = (0, -az, ay)
+  const double cy = -az, cz = ay;
+  const double cross_len = std::sqrt(cy * cy + cz * cz);
+  const double hs = std::sqrt((1.0 - dot) / 2.0);
+  q.w = std::sqrt((1.0 + dot) / 2.0);
+  q.x = 0.0;
+  q.y = hs * cy / cross_len;
+  q.z = hs * cz / cross_len;
+  return q;
+}
 
 JogControlPanel::JogControlPanel(QWidget *parent)
     : rviz_common::Panel(parent)
@@ -52,6 +84,10 @@ void JogControlPanel::onInitialize()
 
   namespace_topic_edit_->setText(tr(raw_node->get_namespace()));
 
+  im_server_ = std::make_shared<interactive_markers::InteractiveMarkerServer>(
+      "jog_control_markers",
+      raw_node);
+
   resetSubscriptionJointStates();
 
   resetSubscriptionRobotDesc();
@@ -67,6 +103,12 @@ void JogControlPanel::resetSubscriptionJointStates()
 {
   auto raw_node = getDisplayContext()->getRosNodeAbstraction().lock()->get_raw_node();
 
+  if (im_server_)
+  {
+    im_server_->clear();
+    im_server_->applyChanges();
+  }
+
   while (joint_rows_layout_ != nullptr && joint_rows_layout_->count() > 0)
   {
     auto item = joint_rows_layout_->takeAt(0);
@@ -79,6 +121,7 @@ void JogControlPanel::resetSubscriptionJointStates()
   }
 
   joints_map_.clear();
+  drag_start_angles_.clear();
 
   sub_joint_states_.reset();
   sub_joint_states_ = raw_node->create_subscription<sensor_msgs::msg::JointState>(
@@ -370,6 +413,8 @@ void JogControlPanel::handleJointStates(sensor_msgs::msg::JointState::ConstShare
       divider->setContentsMargins(0, 5, 0, 5);
       divider->setStyleSheet("color: rgba(180, 180, 180, 95);");
       joint_rows_layout_->addWidget(divider);
+
+      tryCreateInteractiveMarker(joint_name);
     }
 
     if (pos_line_edit != nullptr)
@@ -570,6 +615,7 @@ void JogControlPanel::parseRobotDescription(const std::string &data)
   }
 
   joints_range_map_.clear();
+  joints_info_map_.clear();
 
   auto *robot_elem = doc.FirstChildElement("robot");
   if (robot_elem == nullptr)
@@ -594,6 +640,26 @@ void JogControlPanel::parseRobotDescription(const std::string &data)
         std::strcmp(joint_type, "planar") == 0)
       continue;
 
+    JointInfo info;
+    info.type = joint_type;
+
+    const auto *child_elem = node->FirstChildElement("child");
+    if (child_elem != nullptr && child_elem->Attribute("link") != nullptr)
+      info.child_link = child_elem->Attribute("link");
+
+    const auto *axis_elem = node->FirstChildElement("axis");
+    if (axis_elem != nullptr)
+    {
+      const auto *xyz_attr = axis_elem->Attribute("xyz");
+      if (xyz_attr != nullptr)
+      {
+        std::istringstream iss(xyz_attr);
+        iss >> info.axis[0] >> info.axis[1] >> info.axis[2];
+      }
+    }
+
+    joints_info_map_[joint_name] = info;
+
     if (std::strcmp(joint_type, "continuous") == 0)
     {
       joints_range_map_[joint_name] = MinMax(-M_PI, M_PI);
@@ -611,6 +677,150 @@ void JogControlPanel::parseRobotDescription(const std::string &data)
     const auto upper = ((upper_attr != nullptr) ? std::stod(upper_attr) : M_PI);
 
     joints_range_map_[joint_name] = MinMax(lower, upper);
+  }
+
+  for (const auto &it : joints_map_)
+    tryCreateInteractiveMarker(it.first);
+}
+
+void JogControlPanel::tryCreateInteractiveMarker(const std::string &joint_name)
+{
+  if (!im_server_) return;
+  if (joints_map_.find(joint_name) == joints_map_.end()) return;
+  if (joints_info_map_.find(joint_name) == joints_info_map_.end()) return;
+  createInteractiveMarker(joint_name);
+}
+
+void JogControlPanel::createInteractiveMarker(const std::string &joint_name)
+{
+  const auto &info = joints_info_map_[joint_name];
+  if (info.child_link.empty()) return;
+
+  const auto &ax = info.axis;
+
+  visualization_msgs::msg::InteractiveMarker im;
+  im.header.frame_id = info.child_link;
+  im.name = joint_name;
+  im.description = joint_name;
+  im.scale = 0.20f;
+
+  visualization_msgs::msg::InteractiveMarkerControl ctrl;
+  ctrl.name = "interact";
+  ctrl.orientation = axisToControlOrientation(ax[0], ax[1], ax[2]);
+  ctrl.always_visible = true;
+
+  visualization_msgs::msg::Marker visual;
+  visual.action = visualization_msgs::msg::Marker::ADD;
+
+  if (info.type == "revolute" || info.type == "continuous")
+  {
+    ctrl.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::ROTATE_AXIS;
+    visual.type = visualization_msgs::msg::Marker::CYLINDER;
+    visual.scale.x = 0.14;
+    visual.scale.y = 0.14;
+    visual.scale.z = 0.02;
+    visual.color.r = 1.0f;
+    visual.color.g = 0.8f;
+    visual.color.b = 0.0f;
+    visual.color.a = 0.8f;
+  }
+  else  // prismatic
+  {
+    ctrl.interaction_mode = visualization_msgs::msg::InteractiveMarkerControl::MOVE_AXIS;
+    visual.type = visualization_msgs::msg::Marker::CYLINDER;
+    visual.scale.x = 0.02;
+    visual.scale.y = 0.02;
+    visual.scale.z = 0.15;
+    visual.color.r = 0.0f;
+    visual.color.g = 0.8f;
+    visual.color.b = 1.0f;
+    visual.color.a = 0.8f;
+  }
+
+  ctrl.markers.push_back(visual);
+  im.controls.push_back(ctrl);
+
+  im_server_->insert(im,
+                     [this](const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &fb)
+                     {
+                       handleInteractiveMarkerFeedback(fb);
+                     });
+  im_server_->applyChanges();
+}
+
+void JogControlPanel::handleInteractiveMarkerFeedback(
+    const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback)
+{
+  using Feedback = visualization_msgs::msg::InteractiveMarkerFeedback;
+  const auto &jname = feedback->marker_name;
+
+  if (joints_map_.find(jname) == joints_map_.end()) return;
+  if (joints_info_map_.find(jname) == joints_info_map_.end()) return;
+
+  if (feedback->event_type == Feedback::MOUSE_DOWN)
+  {
+    drag_start_angles_[jname] = joints_map_[jname].state_edit->text().toDouble();
+    drag_start_poses_[jname] = feedback->pose;
+    return;
+  }
+
+  if (feedback->event_type != Feedback::POSE_UPDATE &&
+      feedback->event_type != Feedback::MOUSE_UP)
+    return;
+
+  const auto &info = joints_info_map_[jname];
+  const auto &ax = info.axis;
+
+  double delta = 0.0;
+  if (info.type == "revolute" || info.type == "continuous")
+  {
+    // q_rel = q_start^-1 * q_current
+    const auto &qs = drag_start_poses_.count(jname) ? drag_start_poses_.at(jname).orientation : geometry_msgs::msg::Quaternion{};
+    const auto &qc = feedback->pose.orientation;
+    geometry_msgs::msg::Quaternion qr;
+    qr.w = qs.w * qc.w + qs.x * qc.x + qs.y * qc.y + qs.z * qc.z;
+    qr.x = qs.w * qc.x - qs.x * qc.w - qs.y * qc.z + qs.z * qc.y;
+    qr.y = qs.w * qc.y + qs.x * qc.z - qs.y * qc.w - qs.z * qc.x;
+    qr.z = qs.w * qc.z - qs.x * qc.y + qs.y * qc.x - qs.z * qc.w;
+    delta = 2.0 * std::atan2(qr.x * ax[0] + qr.y * ax[1] + qr.z * ax[2], qr.w);
+  }
+  else
+  {
+    const auto &ps = drag_start_poses_.count(jname) ? drag_start_poses_.at(jname).position : geometry_msgs::msg::Point{};
+    const auto &pc = feedback->pose.position;
+    delta = (pc.x - ps.x) * ax[0] + (pc.y - ps.y) * ax[1] + (pc.z - ps.z) * ax[2];
+  }
+
+  const double start = drag_start_angles_.count(jname) ? drag_start_angles_.at(jname) : joints_map_[jname].state_edit->text().toDouble();
+  double target = start + delta;
+
+  if (joints_range_map_.count(jname))
+  {
+    const auto &mm = joints_range_map_.at(jname);
+    target = std::max(mm.min, std::min(mm.max, target));
+  }
+
+  auto *edit = joints_map_[jname].command_edit;
+  auto *slider = joints_map_[jname].slider;
+  const double t = target;
+  QMetaObject::invokeMethod(this, [edit, slider, t]()
+                            {
+    edit->setText(QString::number(t));
+    if (slider) slider->setValue(static_cast<int>(t * kSliderDecimalFraction)); }, Qt::QueuedConnection);
+
+  auto raw_node = getDisplayContext()->getRosNodeAbstraction().lock()->get_raw_node();
+  control_msgs::msg::JointJog msg;
+  msg.header.stamp = raw_node->now();
+  msg.joint_names.push_back(jname);
+  msg.displacements.push_back(target);
+  pub_joint_jog_->publish(msg);
+
+  if (feedback->event_type == Feedback::MOUSE_UP)
+  {
+    geometry_msgs::msg::Pose identity;
+    im_server_->setPose(jname, identity);
+    im_server_->applyChanges();
+    drag_start_poses_.erase(jname);
   }
 }
 

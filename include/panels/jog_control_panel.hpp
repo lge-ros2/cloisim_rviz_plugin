@@ -10,11 +10,18 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QtMath>
+#include <array>
 #include <control_msgs/msg/joint_jog.hpp>
+#include <geometry_msgs/msg/pose.hpp>
+#include <interactive_markers/interactive_marker_server.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rviz_common/panel.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <std_msgs/msg/string.hpp>
+#include <visualization_msgs/msg/interactive_marker.hpp>
+#include <visualization_msgs/msg/interactive_marker_control.hpp>
+#include <visualization_msgs/msg/interactive_marker_feedback.hpp>
+#include <visualization_msgs/msg/marker.hpp>
 
 namespace cloisim_rviz_plugin
 {
@@ -49,6 +56,11 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
 
   void processMotionQueue();
 
+  void tryCreateInteractiveMarker(const std::string &joint_name);
+  void createInteractiveMarker(const std::string &joint_name);
+  void handleInteractiveMarkerFeedback(
+    const visualization_msgs::msg::InteractiveMarkerFeedback::ConstSharedPtr &feedback);
+
  private:
   static constexpr float kSliderDecimalFraction = 1000.0;
 
@@ -74,6 +86,13 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
     }
   };
 
+  struct JointInfo
+  {
+    std::string type;
+    std::string child_link;
+    std::array<double, 3> axis = {0.0, 0.0, 1.0};
+  };
+
   struct JointWidgets
   {
     QLineEdit *state_edit = nullptr;
@@ -87,6 +106,10 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
 
   std::map<std::string, JointWidgets> joints_map_;
   std::map<std::string, MinMax> joints_range_map_;
+  std::map<std::string, JointInfo> joints_info_map_;
+  std::map<std::string, double> drag_start_angles_;
+  std::map<std::string, geometry_msgs::msg::Pose> drag_start_poses_;
+  std::shared_ptr<interactive_markers::InteractiveMarkerServer> im_server_;
 
   QVBoxLayout *joint_rows_layout_;
   QFormLayout *form_;
