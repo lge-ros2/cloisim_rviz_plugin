@@ -164,17 +164,12 @@ void JogControlPanel::handleSimulationReset()
 
   handleStopButton();
 
-  auto node_lock = getDisplayContext()->getRosNodeAbstraction().lock();
-  if (!node_lock) return;
-  auto raw_node = node_lock->get_raw_node();
+  if (!im_server_) return;
 
-  // Recreate im_server_ to reset the DDS publisher and its history.
-  // Calling clear()+applyChanges() on the old server leaves stale seq=1
-  // messages in the DDS history; new subscribers receive them after
-  // initialization and trigger an endless "sequence out of order" retry loop.
-  im_server_ = std::make_shared<interactive_markers::InteractiveMarkerServer>(
-      "jog_control_markers",
-      raw_node);
+  RCLCPP_INFO(rclcpp::get_logger("JogControlPanel"),
+              "handleSimulationReset: im_server seq before clear=%p", (void*)im_server_.get());
+
+  im_server_->clear();
 
   for (const auto &it : joints_map_)
     tryCreateInteractiveMarker(it.first, /*apply_changes=*/false);
