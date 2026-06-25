@@ -129,20 +129,12 @@ void JogControlPanel::setupTimeJumpHandler()
 
 void JogControlPanel::handleSimulationReset()
 {
-  auto node_lock = getDisplayContext()->getRosNodeAbstraction().lock();
-  if (!node_lock) return;
-  auto raw_node = node_lock->get_raw_node();
+  if (!im_server_) return;
 
   handleStopButton();
 
-  if (im_server_)
-  {
-    im_server_->clear();
-    im_server_->applyChanges();
-  }
-
-  im_server_ = std::make_shared<interactive_markers::InteractiveMarkerServer>(
-      "jog_control_markers", raw_node);
+  im_server_->clear();
+  im_server_->applyChanges();
 
   for (const auto &it : joints_map_)
     tryCreateInteractiveMarker(it.first);
