@@ -144,6 +144,8 @@ class JogControlPanel : public rviz_common::Panel  // QMainWindow
   QPushButton *move_btn_;
   QPushButton *stop_btn_;
 
+  bool reset_in_progress_ = false;
+
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr sub_joint_states_;
 
   rclcpp::Publisher<control_msgs::msg::JointJog>::SharedPtr pub_joint_jog_;

@@ -150,6 +150,12 @@ void JogControlPanel::setupTimeJumpHandler()
 
 void JogControlPanel::handleSimulationReset()
 {
+  // Multiple signals (handleClock, handleJointStates, time_jump_handler_) may
+  // fire simultaneously on a single simulation reset. Only process the first.
+  if (reset_in_progress_) return;
+  reset_in_progress_ = true;
+  QTimer::singleShot(1000, this, [this]() { reset_in_progress_ = false; });
+
   // rviz's onUpdate() computes ros_dt as an unsigned value, so its
   // "ros_dt < 0 -> resetTime()" check never fires on a backward sim-time
   // jump. The shared tf buffer then keeps stale future-dated transforms and
@@ -167,7 +173,7 @@ void JogControlPanel::handleSimulationReset()
   if (!im_server_) return;
 
   RCLCPP_INFO(rclcpp::get_logger("JogControlPanel"),
-              "handleSimulationReset: im_server seq before clear=%p", (void*)im_server_.get());
+              "handleSimulationReset: im_server=%p", (void*)im_server_.get());
 
   im_server_->clear();
 
