@@ -8,6 +8,8 @@
 #include <QScrollArea>
 #include <QSlider>
 #include <rviz_common/display_context.hpp>
+#include <rviz_common/frame_manager_iface.hpp>
+#include <rviz_common/transformation/frame_transformer.hpp>
 #include <rcl/time.h>
 #include <sstream>
 #include <tinyxml2.h>
@@ -129,6 +131,18 @@ void JogControlPanel::setupTimeJumpHandler()
 
 void JogControlPanel::handleSimulationReset()
 {
+  // rviz's onUpdate() computes ros_dt as an unsigned value, so its
+  // "ros_dt < 0 -> resetTime()" check never fires on a backward sim-time
+  // jump. The shared tf buffer then keeps stale future-dated transforms and
+  // rejects fresh data as TF_OLD_DATA. Flush it here as resetTime() would.
+  auto frame_manager = getDisplayContext()->getFrameManager();
+  if (frame_manager)
+  {
+    auto transformer = frame_manager->getTransformer();
+    if (transformer)
+      transformer->clear();
+  }
+
   if (!im_server_) return;
 
   handleStopButton();
