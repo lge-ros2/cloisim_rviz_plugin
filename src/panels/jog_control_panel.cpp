@@ -54,6 +54,39 @@ static geometry_msgs::msg::Quaternion axisToControlOrientation(double ax, double
   return q;
 }
 
+// Maps the CYLINDER marker's local symmetry axis (Z) directly onto the given
+// axis vector, independent of any InteractiveMarkerControl orientation.
+static geometry_msgs::msg::Quaternion axisToMarkerOrientation(double ax, double ay, double az)
+{
+  geometry_msgs::msg::Quaternion q;
+  q.w = 1.0;
+  q.x = 0.0;
+  q.y = 0.0;
+  q.z = 0.0;
+  const double len = std::sqrt(ax * ax + ay * ay + az * az);
+  if (len < 1e-9) return q;
+  ax /= len;
+  ay /= len;
+  az /= len;
+  const double dot = az;  // dot({0,0,1}, {ax,ay,az})
+  if (dot > 1.0 - 1e-6) return q;
+  if (dot < -1.0 + 1e-6)
+  {
+    q.w = 0.0;
+    q.x = 1.0;
+    return q;
+  }
+  // cross({0,0,1}, {ax,ay,az}) = (-ay, ax, 0)
+  const double cx = -ay, cy = ax;
+  const double cross_len = std::sqrt(cx * cx + cy * cy);
+  const double hs = std::sqrt((1.0 - dot) / 2.0);
+  q.w = std::sqrt((1.0 + dot) / 2.0);
+  q.x = hs * cx / cross_len;
+  q.y = hs * cy / cross_len;
+  q.z = 0.0;
+  return q;
+}
+
 JogControlPanel::JogControlPanel(QWidget *parent)
     : rviz_common::Panel(parent)
     , worker_running_(true)
@@ -804,6 +837,7 @@ void JogControlPanel::createInteractiveMarker(const std::string &joint_name, boo
   ctrl.name = "interact";
   ctrl.orientation = axisToControlOrientation(ax[0], ax[1], ax[2]);
   ctrl.always_visible = true;
+  ctrl.independent_marker_orientation = true;
 
   visualization_msgs::msg::Marker visual;
   visual.action = visualization_msgs::msg::Marker::ADD;
@@ -814,7 +848,7 @@ void JogControlPanel::createInteractiveMarker(const std::string &joint_name, boo
     visual.type = visualization_msgs::msg::Marker::CYLINDER;
     visual.scale.x = 0.14;
     visual.scale.y = 0.14;
-    visual.scale.z = 0.02;
+    visual.scale.z = 0.01;
     visual.color.r = 1.0f;
     visual.color.g = 0.8f;
     visual.color.b = 0.0f;
@@ -832,6 +866,10 @@ void JogControlPanel::createInteractiveMarker(const std::string &joint_name, boo
     visual.color.b = 1.0f;
     visual.color.a = 0.8f;
   }
+
+  // independent_marker_orientation = true, so this orientation is applied directly
+  // in the InteractiveMarker's frame, regardless of ctrl.orientation.
+  visual.pose.orientation = axisToMarkerOrientation(ax[0], ax[1], ax[2]);
 
   ctrl.markers.push_back(visual);
   im.controls.push_back(ctrl);
